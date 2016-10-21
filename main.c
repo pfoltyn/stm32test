@@ -33,9 +33,8 @@ uint16_t WS2812_IO_Low = 0x0000;
 
 volatile uint8_t WS2812_TC = 1;
 volatile uint8_t TIM2_overflows = 0;
-volatile uint8_t repeat = 0;
 
-#define LEDS 150
+#define LEDS 300
 
 /* WS2812 framebuffer
  * buffersize = #LEDs * 24 */
@@ -240,14 +239,6 @@ void DMA1_Channel7_IRQHandler(void)
 	TIM_DMACmd(TIM2, TIM_DMA_CC1, DISABLE);
 	TIM_DMACmd(TIM2, TIM_DMA_CC2, DISABLE);
 	TIM_DMACmd(TIM2, TIM_DMA_Update, DISABLE);
-
-	if (repeat < 2)
-	{	
-		repeat++;
-		WS2812_sendbuf(sizeof WS2812_IO_framedata);
-	} else {
-		repeat = 0;
-	}
 }
 
 /* TIM2 Interrupt Handler gets executed on every TIM2 Update if enabled */
@@ -310,26 +301,10 @@ void WS2812_framedata_setPixel(uint8_t row, uint16_t column, uint8_t red, uint8_
  */
 void WS2812_framedata_setRow(uint8_t row, uint16_t columns, uint8_t red, uint8_t green, uint8_t blue)
 {
-	uint8_t i;
+	uint16_t i;
 	for (i = 0; i < columns; i++)
 	{
 		WS2812_framedata_setPixel(row, i, red, green, blue);
-	}
-}
-
-/* This function is a wrapper function to set all the LEDs in the column to the specified color
- * 
- * Arguments:
- * rows = the number of channels/LED strips to set the row in from 0 to 15
- * column = the column/LED position in the LED string from 0 to number of LEDs per strip
- * red, green, blue = the RGB color triplet that the pixels should display 
- */
-void WS2812_framedata_setColumn(uint8_t rows, uint16_t column, uint8_t red, uint8_t green, uint8_t blue)
-{
-	uint8_t i;
-	for (i = 0; i < rows; i++)
-	{
-		WS2812_framedata_setPixel(i, column, red, green, blue);
 	}
 }
 
@@ -348,12 +323,7 @@ int main(void)
 		{
 			// wait until the last frame was transmitted
 			while(!WS2812_TC);
-			// this approach sets each pixel individually
-			//WS2812_framedata_setPixel(0, 0, colors[i][0], colors[i][1], colors[i][2]);
-			//WS2812_framedata_setPixel(0, 1, colors[i][0], colors[i][1], colors[i][2]);
-			// this funtion is a wrapper and achieved the same thing, tidies up the code
 			WS2812_framedata_setRow(0, LEDS, colors[i][0], colors[i][1], colors[i][2]);
-			// send the framebuffer out to the LEDs
 			WS2812_sendbuf(sizeof(WS2812_IO_framedata));
 			// wait some amount of time
 			Delay(300000L);
