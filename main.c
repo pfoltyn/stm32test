@@ -22,6 +22,7 @@
  */
 
 #include <stm32f10x.h>
+#include <math.h>
 
 /* this define sets the number of TIM2 overflows
  * to append to the data frame for the LEDs to 
@@ -276,57 +277,53 @@ void TIM2_IRQHandler(void)
  * column = the column/LED position in the LED string from 0 to number of LEDs per strip
  * red, green, blue = the RGB color triplet that the pixel should display 
  */
-void WS2812_framedata_setPixel(uint8_t row, uint16_t column, uint8_t red, uint8_t green, uint8_t blue)
+void WS2812_framedata_setPixel(uint16_t column, uint8_t red, uint8_t green, uint8_t blue)
 {
 	uint8_t i;
 	for (i = 0; i < 8; i++)
 	{
-		// clear the data for pixel 
-		WS2812_IO_framedata[((column*24)+i)] &= ~(0x01<<row);
-		WS2812_IO_framedata[((column*24)+8+i)] &= ~(0x01<<row);
-		WS2812_IO_framedata[((column*24)+16+i)] &= ~(0x01<<row);
-		// write new data for pixel
-		WS2812_IO_framedata[((column*24)+i)] |= ((((green<<i) & 0x80)>>7)<<row);
-		WS2812_IO_framedata[((column*24)+8+i)] |= ((((red<<i) & 0x80)>>7)<<row);
-		WS2812_IO_framedata[((column*24)+16+i)] |= ((((blue<<i) & 0x80)>>7)<<row);
+		WS2812_IO_framedata[((column*24)+i)] = ((green<<i) & 0x80)>>7;
+		WS2812_IO_framedata[((column*24)+8+i)] = ((red<<i) & 0x80)>>7;
+		WS2812_IO_framedata[((column*24)+16+i)] = ((blue<<i) & 0x80)>>7;
 	}
 }
 
-/* This function is a wrapper function to set all LEDs in the complete row to the specified color
- * 
- * Arguments:
- * row = the channel number/LED strip to set the color of from 0 to 15
- * columns = the number of LEDs in the strip to set to the color from 0 to number of LEDs per strip
- * red, green, blue = the RGB color triplet that the pixels should display 
- */
-void WS2812_framedata_setRow(uint8_t row, uint16_t columns, uint8_t red, uint8_t green, uint8_t blue)
+uint8_t
+fast_sin(float angle)
 {
-	uint16_t i;
-	for (i = 0; i < columns; i++)
-	{
-		WS2812_framedata_setPixel(row, i, red, green, blue);
-	}
+	const float a = 0.405284735;
+	const float b = 1.27323954;
+
+	if (angle < -M_PI)
+		angle += 2 * M_PI;
+	else if (angle > M_PI)
+		angle -= 2 * M_PI;
+
+	return 16 + (uint8_t)(16 * ((angle * angle * a * ((angle < 0) ? 1 : -1)) + angle * b));
 }
 
 int main(void) 
 {	
-	uint8_t i;
+	float o = 0;
+	uint16_t i;
 	
 	GPIO_init();
 	DMA_init();
 	TIM2_init();
 	
-	while (1){
-		// set two pixels (columns) in the defined row (channel 0) to the
-		// color values defined in the colors array
-		for (i = 0; i < 12; i++)
+	while (1)
+	{
+		while(!WS2812_TC);
+		for (i = 0; i < LEDS; i++)
 		{
-			// wait until the last frame was transmitted
-			while(!WS2812_TC);
-			WS2812_framedata_setRow(0, LEDS, colors[i][0], colors[i][1], colors[i][2]);
-			WS2812_sendbuf(sizeof(WS2812_IO_framedata));
-			// wait some amount of time
-			Delay(300000L);
+			float w = ((2 * M_PI) / LEDS) * i + o;
+			WS2812_framedata_setPixel(i, fast_sin(w + M_PI_2), fast_sin(w), fast_sin(w / 2));
 		}
+		WS2812_sendbuf(sizeof(WS2812_IO_framedata));
+		// wait some amount of time
+		Delay(300000L);
+		o -= 0.1;
+		if (o < -2 * M_PI)
+			o = 0;
 	}
 }
