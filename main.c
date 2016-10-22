@@ -294,17 +294,15 @@ fast_sin(float angle)
 	const float a = 0.405284735;
 	const float b = 1.27323954;
 
-	if (angle < -M_PI)
-		angle += 2 * M_PI;
-	else if (angle > M_PI)
-		angle -= 2 * M_PI;
-
-	return 16 + (uint8_t)(16 * ((angle * angle * a * ((angle < 0) ? 1 : -1)) + angle * b));
+	return (uint8_t)(32 * ((angle * angle * a * ((angle < 0) ? 1 : -1)) + angle * b));
 }
+
+#define DIV_FACTOR 1
 
 int main(void) 
 {	
-	float o = 0;
+	float angle = 0;
+	uint16_t offset = 0;
 	uint16_t i;
 	
 	GPIO_init();
@@ -314,16 +312,37 @@ int main(void)
 	while (1)
 	{
 		while(!WS2812_TC);
-		for (i = 0; i < LEDS; i++)
+		for (i = 0; i < offset; i++)
 		{
-			float w = ((2 * M_PI) / LEDS) * i + o;
-			WS2812_framedata_setPixel(i, fast_sin(w + M_PI_2), fast_sin(w), fast_sin(w / 2));
+			WS2812_framedata_setPixel(i, 0, 0, 0);
+		}
+		for (i = offset; i < offset + LEDS / DIV_FACTOR; i++)
+		{
+			uint8_t r = 0, g = 0, b = 0;
+			float w = -M_PI + (2 * M_PI / LEDS) * i + angle;
+			if (w < -M_PI)
+				w += 2 * M_PI;
+			else if (w > M_PI)
+				w -= 2 * M_PI;
+			r = fast_sin(w);
+			g = fast_sin(w + 1);
+			b = fast_sin(w + 2);
+			WS2812_framedata_setPixel(i, r, g, b);
+		}
+		for (i = offset + LEDS / DIV_FACTOR; i < LEDS; i++)
+		{
+			WS2812_framedata_setPixel(i, 0, 0, 0);
 		}
 		WS2812_sendbuf(sizeof(WS2812_IO_framedata));
 		// wait some amount of time
 		Delay(300000L);
-		o -= 0.1;
-		if (o < -2 * M_PI)
-			o = 0;
+		angle += 0.1;
+		if (angle < -M_PI)
+			angle += 2 * M_PI;
+		else if (angle > M_PI)
+			angle -= 2 * M_PI;
+		offset++;
+		if (offset > LEDS - LEDS / DIV_FACTOR)
+			offset = 0;
 	}
 }
